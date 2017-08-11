@@ -1,7 +1,13 @@
 import queue
-from typing import List, Optional, Set
+from typing import List, Optional, Set, Union, FrozenSet
 from weakref import ref
 from collections import Counter
+
+PossiblesSet = Union[Set[int], FrozenSet[int]]
+
+
+class SudokuError(BaseException):
+  pass
 
 
 class Cell:
@@ -42,8 +48,7 @@ class Block:
     for c in cells:
       c.register_block(self)
 
-  def inferene(self):
-    num = self.degree ** 2
+  def inference(self):
     assigned_values: Set[int] = {}
     possibles_counter = Counter()
     for c in self.cells:
@@ -53,14 +58,21 @@ class Block:
         assigned_values.add(c.value)
 
     possibles = set(possibles_counter.keys()) - assigned_values
+    one_possibles = set(k for k, v in possibles_counter.items() if v == 1)
 
     for c in self.cells:
       if c.value is None:
         c.possibles = c.possibles.intersection(possibles)
         if len(c.possibles) == 1:
-          
-      else:
-        pass
+          value = list(c.possibles)[0]
+          c.assign(value)
+        elif len(one_possibles) > 0:
+          the_possibles = one_possibles.intersection(c.possibles)
+          if len(the_possibles) > 1:
+            raise SudokuError('un-solvable sudoku')
+          elif len(the_possibles) == 1:
+            value = list(the_possibles)[0]
+            c.assign(value)
 
 
 class Sudoku:
