@@ -373,7 +373,7 @@ def solve(sudoku: Sudoku,
         idx = random.randint(0, int(min(NUM_WORKER, len(futures) - 1)))
         f = futures.pop(idx)  # type:Future
       try:
-        result: MultiProcessedWorkerResult = f.result(timeout=1)
+        result: MultiProcessedWorkerResult = f.result(timeout=0.1)
         if result.sudoku_results:
           satisfied_results += result.sudoku_results
           if one_solution:
@@ -394,7 +394,8 @@ def solve(sudoku: Sudoku,
       except SudokuConflict:
         logger.debug('Sudoku Conflict in child')
       except TimeoutError:
-        logger.debug('next future')
+        logger.debug('next future #task={} #sol={}'.format(
+                len(futures), len(satisfied_results)))
         futures.insert(NUM_WORKER, f)
     return satisfied_results
 
