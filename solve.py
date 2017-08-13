@@ -10,7 +10,12 @@ class SudokuConflict(BaseException):
   pass
 
 
-class CounterQueue(Counter):
+class PropagateBlockNameQueue(Counter):
+  '''Briefly, priority queue
+  
+  This queue counts the propagation to block as priority.
+  The the priority is high, many cells try to propagate their conditions to the block.
+  '''
   def dequeue(self):
     result_opt = self.most_common(1)
     if result_opt == []:
@@ -58,7 +63,7 @@ class Cell:
 
 InnerBlockPropagateResult = namedtuple(
   typename='InnerBlockInferenceResult',
-  field_names=['has_assigned', 'update_req_cells'],
+  field_names=['has_cell_assigned', 'update_req_cells'],
 )
 
 
@@ -77,15 +82,20 @@ class Block:
     self.rest_values = set(range(1, num + 1))
 
   def propagate(self, sudoku: 'Sudoku') -> Dict[str, int]:
-    result = self._propagate(sudoku)
-    update_req_cells = set(result.update_req_cells)
-    while result.has_assigned:
+    '''propagate block status to cells, and update the cell's possibilities.
+    '''
+    result = None
+
+    update_req_cells: Set[Cell] = set()
+    while result is None or result.has_cell_assigned:
       result = self._propagate(sudoku)
       update_req_cells.update(result.update_req_cells)
-    counter = Counter()
+
+    update_req_block_name_counter = Counter()
+
     for c in update_req_cells:  # type:Cell
-      counter.update(c.block_names)
-    return counter
+      update_req_block_name_counter.update(c.block_names)
+    return update_req_block_name_counter
 
   def _propagate(self, sudoku: 'Sudoku') -> InnerBlockPropagateResult:
     cells = list(map(sudoku.get_cell, self.cells))
@@ -101,38 +111,41 @@ class Block:
     possibles_counter = Counter()
 
     update_req_cells = set()
-    has_assigned = False
+    has_cell_assigned = False
 
-    # initialize possibles_counter
+    # initialize possibles_counter and update cell's possible
     for c in filter(lambda c: not c.is_assigned(), cells):
       if c.possibles - self.rest_values:
-        # update required
+        # the cell is required to update
         c.possibles = c.possibles.intersection(self.rest_values)
         update_req_cells.add(c)
       possibles_counter.update(c.possibles)
 
+    # identifiable cell value's because of all different constraint
     one_possibles = {
       k
       for k, v in possibles_counter.items()
       if v == 1
     }
+    
+    
     for c in filter(lambda c: not c.is_assigned(), cells):
       the_one_possibles = one_possibles.intersection(c.possibles)
-      if the_one_possibles:
+      if the_one_possibles: # the cell is identifiable by all different constraint 
         if len(the_one_possibles) == 1:
           value = list(the_one_possibles)[0]
           c.assign(value)
           update_req_cells.add(c)
-          has_assigned = True
+          has_cell_assigned = True
         else:
           raise SudokuConflict('multiple inferred values in one cell')
-      elif len(c.possibles) == 1:
+      elif len(c.possibles) == 1: # possible values of the cell is singleton 
         value = list(c.possibles)[0]
         c.assign(value)
         update_req_cells.add(c)
-        has_assigned = True
+        has_cell_assigned = True
     return InnerBlockPropagateResult(
-      has_assigned=has_assigned,
+      has_cell_assigned=has_cell_assigned,
       update_req_cells=update_req_cells,
     )
 
@@ -141,6 +154,8 @@ class Block:
 
 
 class SudokuResult:
+  '''The result form of sudoku.
+  '''
   cells: Dict[Tuple[int, int], Optional[int]]
   degree: int
 
@@ -181,7 +196,7 @@ class SudokuResult:
 class Sudoku:
   cells: Dict[Tuple[int, int], Cell]
   blocks: List[Block]
-  inference_block_name_queue: CounterQueue
+  inference_block_name_queue: PropagateBlockNameQueue
   degree: int
 
   def __init__(self, degree):
@@ -200,7 +215,7 @@ class Sudoku:
       b.name: b
       for b in self.gen_blocks(cells, degree)
     }
-    self.inference_block_name_queue = CounterQueue()
+    self.inference_block_name_queue = PropagateBlockNameQueue()
 
   @staticmethod
   def gen_blocks(cells: List[Cell], degree: int) -> List[Block]:
