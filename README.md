@@ -60,7 +60,7 @@ spend time(sec) = 2.611497163772583
 $ python solve.py --parallel test_data/ill-posed/16x16.csv
 ...
 #solutions = 20
-spend time(sec) = 33.79838275909424
+spend time(sec) = 1.3520002365112305
 
 $ python solve.py --parallel --one test_data/ill-posed/16x16.csv
   ,  , 5,  | 7,  ,  ,  | 6,  ,  ,  |11,  ,  , 1
@@ -117,12 +117,13 @@ spend time(sec) = 0.5987434387207031
 $ python solve.py test_data/ill-posed/9x9.csv
 ...
 #solutions = 507
-spend time(sec) = 6.469801902770996
+spend time(sec) = 6.1342785358428955
 
 $ python solve.py test_data/ill-posed/16x16.csv
 ...
 #solutions = 20
-spend time(sec) = 77.15005278587341
+spend time(sec) = 1.912825584411621
+
 
 $ python solve.py --parallel --one test_data/ill-posed/16x16.csv
   ,  , 5,  | 7,  ,  ,  | 6,  ,  ,  |11,  ,  , 1
@@ -147,7 +148,7 @@ $ python solve.py --parallel --one test_data/ill-posed/16x16.csv
 
 SATISFIABLE
 #solutions = 1
-spend time(sec) = 4.385382652282715
+spend time(sec) = 1.197763442993164
 
 solution 1/1
  8,10, 5,14| 7, 9, 2,16| 6,13, 3,12|11, 4,15, 1
@@ -171,5 +172,5 @@ solution 1/1
 13, 5, 2, 9|15, 4,11,10| 7,12,16, 8|14, 1, 6, 3
 
 #solutions = 1
-spend time(sec) = 4.385382652282715
+spend time(sec) = 1.197763442993164
 ```

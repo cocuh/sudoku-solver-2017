@@ -282,10 +282,13 @@ class Sudoku:
       degree=self.degree,
     )
 
-  def sample_cell_for_assuming(self) -> Cell:
+  def sample_cell_for_assuming(self, sudoku) -> Cell:
     return min(
       (c for c in self.cells.values() if c.value is None),
-      key=lambda c: len(c.possibles),
+      key=lambda c: (
+        len(c.possibles),
+        sum(len(b.rest_values) for b in map(sudoku.get_block, c.block_names))
+      ),
     )
 
   def __str__(self):
@@ -298,14 +301,14 @@ MultiProcessedWorkerResult = namedtuple(
 )
 
 
-def _solve_worker_multi(sudoku: Sudoku) -> MultiProcessedWorkerResult:
+def _solve_worker_multi(sudoku: Sudoku, one_solution: bool) -> MultiProcessedWorkerResult:
   sudoku.propagate()
   result = None
   assumptions = []
   if sudoku.is_all_assigned():
     result = [sudoku.gen_result()]
   else:
-    target_cell: Cell = sudoku.sample_cell_for_assuming()
+    target_cell: Cell = sudoku.sample_cell_for_assuming(sudoku)
     values = copy.deepcopy(target_cell.possibles)
     target_cell_coord = copy.deepcopy(target_cell.coord)
     assumptions = []
@@ -331,7 +334,7 @@ def _solve_single_thread(sudoku: Sudoku, one_solution: bool) -> List[SudokuResul
 
   results = []
 
-  target_cell: Cell = sudoku.sample_cell_for_assuming()
+  target_cell: Cell = sudoku.sample_cell_for_assuming(sudoku)
   values = copy.deepcopy(target_cell.possibles)
   target_cell_coord = copy.deepcopy(target_cell.coord)
 
@@ -362,10 +365,13 @@ def solve(sudoku: Sudoku,
 
     satisfied_results = []
 
-    futures = [executor.submit(_solve_worker_multi, sudoku)]
+    futures = [executor.submit(_solve_worker_multi, sudoku, one_solution)]
     while futures:  # type: Future
-      f = random.choice(futures)
-      futures.remove(f)
+      if one_solution:
+        f = futures.pop()
+      else:
+        f = random.choice(futures)
+        futures.remove(f)
       try:
         result: MultiProcessedWorkerResult = f.result(timeout=1)
         if result.sudoku_results:
@@ -379,7 +385,7 @@ def solve(sudoku: Sudoku,
           for sudoku_child in result.assumptions:
             if len(futures) <= NUM_WORKER:
               logger.debug('add task and gen task')
-              futures.append(executor.submit(_solve_worker_multi, sudoku_child))
+              futures.append(executor.submit(_solve_worker_multi, sudoku_child, one_solution))
             else:
               logger.debug('add task as to the last')
               futures.append(executor.submit(_solve_worker_single, sudoku_child, one_solution))
@@ -486,6 +492,7 @@ def main():
   else:
     output.write('UNSATISFIABLE\n')
   sys.exit()
+
 
 if __name__ == '__main__':
   main()
