@@ -8,6 +8,8 @@ import os
 import random
 import sys
 import time
+import functools as ft
+import operator as op
 from typing import List, Optional, Set, Tuple, Dict, TextIO
 
 logger = logging.getLogger(__name__)
@@ -286,8 +288,7 @@ class Sudoku:
     return min(
       (c for c in self.cells.values() if c.value is None),
       key=lambda c: (
-        len(c.possibles),
-        sum(len(b.rest_values) for b in map(sudoku.get_block, c.block_names))
+        len(c.possibles) / len(ft.reduce(op.or_, (b.rest_values for b in map(sudoku.get_block, c.block_names)))),
       ),
     )
 
@@ -395,7 +396,7 @@ def solve(sudoku: Sudoku,
         logger.debug('Sudoku Conflict in child')
       except TimeoutError:
         logger.debug('next future #task={} #sol={}'.format(
-                len(futures), len(satisfied_results)))
+          len(futures), len(satisfied_results)))
         futures.insert(NUM_WORKER, f)
     return satisfied_results
 
