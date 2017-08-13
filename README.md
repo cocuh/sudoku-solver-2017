@@ -50,7 +50,7 @@ optional arguments:
 ```
 
 # benchmark
-## with parallel
+## in parallel
 ```shell
 $ python solve.py --parallel test_data/ill-posed/9x9.csv
 ...
@@ -112,7 +112,7 @@ solution 1/1
 spend time(sec) = 0.5987434387207031
 ```
 
-## with single
+## in single threading
 ```shell
 $ python solve.py test_data/ill-posed/9x9.csv
 ...
