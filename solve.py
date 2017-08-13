@@ -339,15 +339,15 @@ def _solve_single_thread(sudoku: Sudoku, one_solution: bool) -> List[SudokuResul
   target_cell_coord = copy.deepcopy(target_cell.coord)
 
   for sudoku_child, value in [(copy.deepcopy(sudoku), v) for v in values]:
-    logger.debug('try assigning: {}={}'.format(target_cell_coord, value))
     sudoku_child.assign(target_cell_coord, value)
     try:
       child_results = _solve_single_thread(sudoku_child, one_solution)
       results += child_results
+      if child_results:
+        logger.debug('find satisfied result:{}'.format(len(results)))
       if one_solution and child_results:
         return results
     except SudokuConflict:
-      logger.debug('backtrack')
       pass
   return results
 
@@ -383,11 +383,13 @@ def solve(sudoku: Sudoku,
             return satisfied_results
         else:
           for sudoku_child in result.assumptions:
-            if len(futures) <= NUM_WORKER:
-              logger.debug('add task and gen task')
+            if len(futures) <= NUM_WORKER * 3:
+              logger.debug('add task and gen task: #task={} #sol={}'.format(
+                len(futures), len(satisfied_results)))
               futures.append(executor.submit(_solve_worker_multi, sudoku_child, one_solution))
             else:
-              logger.debug('add task as to the last')
+              logger.debug('add task as to the last: #task={} #sol={}'.format(
+                len(futures), len(satisfied_results)))
               futures.append(executor.submit(_solve_worker_single, sudoku_child, one_solution))
       except SudokuConflict:
         logger.debug('Sudoku Conflict in child')
