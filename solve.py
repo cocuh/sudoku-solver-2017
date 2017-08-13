@@ -324,7 +324,7 @@ def _solve_worker_single(sudoku: Sudoku) -> MultiProcessedWorkerResult:
   )
 
 
-def _solve_single_thread(sudoku: Sudoku) -> List[SudokuResult]:
+def _solve_single_thread(sudoku: Sudoku, one_solution: bool) -> List[SudokuResult]:
   sudoku.propagate()
   if sudoku.is_all_assigned():
     return [sudoku.gen_result()]
@@ -341,17 +341,21 @@ def _solve_single_thread(sudoku: Sudoku) -> List[SudokuResult]:
     try:
       child_results = solve(sudoku_child)
       results += child_results
+      if one_solution:
+        return results
     except SudokuConflict:
       logger.debug('backtrack')
       pass
   return results
 
 
-def solve(sudoku: Sudoku, executor: Optional[Executor] = None) -> List[SudokuResult]:
+def solve(sudoku: Sudoku, 
+          executor: Optional[Executor],
+          one_solution:bool) -> List[SudokuResult]:
   if executor is None:
     # single thread
     logger.debug('single threading')
-    return _solve_single_thread(sudoku)
+    return _solve_single_thread(sudoku, one_solution)
   else:
     # multi-threading/processing 
     logger.debug('multi-threading/processing')
@@ -366,6 +370,9 @@ def solve(sudoku: Sudoku, executor: Optional[Executor] = None) -> List[SudokuRes
         result: MultiProcessedWorkerResult = f.result(timeout=1)
         if result.sudoku_results is not None:
           satisfied_results += result.sudoku_results
+          if one_solution:
+            executor.shutdown(False)
+            return satisfied_results
         else:
           for sudoku_child in result.assumptions:
             if len(futures) <= NUM_WORKER:
@@ -418,12 +425,17 @@ def parse_args():
   parser.add_argument(
     '--parallel',
     action='store_true',
-    help='solve with multi-processing if specified, '
+    help='solve with cpu_num worker processes if specified, '
          'default is single threading',
   )
   parser.add_argument(
     '--debug',
     action='store_true',
+  )
+  parser.add_argument(
+    '--one',
+    action='store_true',
+    help='if you want to one solution.'
   )
   return parser.parse_args()
 
@@ -438,6 +450,7 @@ def main():
   output: TextIO = args.output
 
   start_time = time.time()
+  one_solution = args.one
 
   if args.parallel:
     executor = ProcessPoolExecutor(NUM_WORKER)
@@ -446,7 +459,7 @@ def main():
 
   output.write(str(sudoku))
   try:
-    results = solve(sudoku, executor)
+    results = solve(sudoku, executor, one_solution)
   except SudokuConflict:
     results = []
   finally:
@@ -455,7 +468,7 @@ def main():
   output.write('\n\n')
 
   if results:
-    if len(results) == 1:
+    if len(results) == 1 and not one_solution:
       output.write('SATISFIABLE: well-posed problem\n')
     else:
       output.write('SATISFIABLE\n')
