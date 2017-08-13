@@ -339,7 +339,7 @@ def _solve_single_thread(sudoku: Sudoku, one_solution: bool) -> List[SudokuResul
     logger.debug('try assigning: {}={}'.format(target_cell_coord, value))
     sudoku_child.assign(target_cell_coord, value)
     try:
-      child_results = solve(sudoku_child)
+      child_results = _solve_single_thread(sudoku_child, one_solution)
       results += child_results
       if one_solution:
         return results
