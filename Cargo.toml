@@ -1,9 +1,0 @@
-[package]
-name = "sudoku16-2017"
-version = "0.1.0"
-authors = ["Kosuke Kusano <cocuh.kk@gmail.com>"]
-
-[dependencies]
-bit-vec = "0.4.4"
-
-
