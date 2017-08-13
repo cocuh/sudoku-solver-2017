@@ -71,7 +71,7 @@ class Cell:
 
 
 InnerBlockPropagateResult = namedtuple(
-  typename='InnerBlockInferenceResult',
+  typename='InnerBlockPropagateResult',
   field_names=['has_cell_assigned', 'update_req_cells'],
 )
 
@@ -204,7 +204,7 @@ class SudokuResult:
 class Sudoku:
   cells: Dict[Tuple[int, int], Cell]
   blocks: List[Block]
-  inference_block_name_queue: PropagateBlockNameQueue
+  propagate_block_name_queue: PropagateBlockNameQueue
   degree: int
 
   def __init__(self, degree):
@@ -223,7 +223,7 @@ class Sudoku:
       b.name: b
       for b in self.gen_blocks(cells, degree)
     }
-    self.inference_block_name_queue = PropagateBlockNameQueue()
+    self.propagate_block_name_queue = PropagateBlockNameQueue()
 
   @staticmethod
   def gen_blocks(cells: List[Cell], degree: int) -> List[Block]:
@@ -255,14 +255,14 @@ class Sudoku:
   def assign(self, coord: Tuple[int, int], value: int):
     cell: Cell = self.cells[coord]
     cell.assign(value)
-    self.inference_block_name_queue.update(cell.block_names)
+    self.propagate_block_name_queue.update(cell.block_names)
 
   def propagate(self):
-    while not self.inference_block_name_queue.empty():
-      block_name, count = self.inference_block_name_queue.dequeue()
+    while not self.propagate_block_name_queue.empty():
+      block_name, count = self.propagate_block_name_queue.dequeue()
       block = self.get_block(block_name)
-      inference_req_blocks = block.propagate(self)
-      self.inference_block_name_queue.update(inference_req_blocks)
+      propagate_req_blocks = block.propagate(self)
+      self.propagate_block_name_queue.update(propagate_req_blocks)
 
   def is_all_assigned(self) -> bool:
     return all(c.value is not None for c in self.cells.values())
