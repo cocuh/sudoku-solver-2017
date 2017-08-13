@@ -425,8 +425,8 @@ def parse_args():
   parser.add_argument(
     '--parallel',
     action='store_true',
-    help='solve with cpu_num worker processes if specified, '
-         'default is single threading',
+    help='solve with cpu_num worker processes if specified,\n'
+         'default: single threading',
   )
   parser.add_argument(
     '--debug',
