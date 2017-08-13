@@ -435,7 +435,7 @@ def parse_args():
   parser.add_argument(
     '--one',
     action='store_true',
-    help='if you want to one solution.'
+    help='if you want only one solution.'
   )
   return parser.parse_args()
 

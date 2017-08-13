@@ -12,7 +12,7 @@ optional arguments:
   --parallel       solve with cpu_num worker processes if specified, default
                    is single threading
   --debug
-  --one            if you want to one solution.
+  --one            if you want only one solution.
 ```
 
 ## Example: problem csv
