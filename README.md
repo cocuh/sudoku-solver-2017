@@ -9,7 +9,7 @@ positional arguments:
 optional arguments:
   -h, --help       show this help message and exit
   --output OUTPUT
-  --parallel       solve with cpu_num worker processes if specified, 
+  --parallel       solve with cpu_num*2 worker processes if specified, 
                    default: single threading
   --debug
   --one            if you want only one solution.

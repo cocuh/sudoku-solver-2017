@@ -11,7 +11,7 @@ import time
 from typing import List, Optional, Set, Tuple, Dict, TextIO
 
 logger = logging.getLogger(__name__)
-NUM_WORKER = os.cpu_count()
+NUM_WORKER = os.cpu_count() * 2
 
 
 class SudokuConflict(BaseException):
@@ -366,12 +366,12 @@ def solve(sudoku: Sudoku,
     satisfied_results = []
 
     futures = [executor.submit(_solve_worker_multi, sudoku, one_solution)]
-    while futures:  # type: Future
+    while futures:  # type: List[Future]
       if one_solution:
-        f = futures.pop()
+        f = futures.pop()  # type:Future
       else:
-        f = random.choice(futures)
-        futures.remove(f)
+        idx = random.randint(0, int(min(NUM_WORKER, len(futures) - 1)))
+        f = futures.pop(idx)  # type:Future
       try:
         result: MultiProcessedWorkerResult = f.result(timeout=1)
         if result.sudoku_results:
@@ -382,8 +382,8 @@ def solve(sudoku: Sudoku,
               f.cancel()
             return satisfied_results
         else:
-          for sudoku_child in result.assumptions:
-            if len(futures) <= NUM_WORKER * 3:
+          for idx, sudoku_child in enumerate(result.assumptions):
+            if len(futures) <= NUM_WORKER * 2:
               logger.debug('add task and gen task: #task={} #sol={}'.format(
                 len(futures), len(satisfied_results)))
               futures.append(executor.submit(_solve_worker_multi, sudoku_child, one_solution))
@@ -395,7 +395,7 @@ def solve(sudoku: Sudoku,
         logger.debug('Sudoku Conflict in child')
       except TimeoutError:
         logger.debug('next future')
-        futures.append(f)
+        futures.insert(NUM_WORKER, f)
     return satisfied_results
 
 
@@ -435,7 +435,7 @@ def parse_args():
   parser.add_argument(
     '--parallel',
     action='store_true',
-    help='solve with cpu_num worker processes if specified,\n'
+    help='solve with cpu_num*2 worker processes if specified,\n'
          'default: single threading',
   )
   parser.add_argument(
