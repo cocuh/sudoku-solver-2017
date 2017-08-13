@@ -15,7 +15,7 @@ optional arguments:
   --one            if you want only one solution.
 ```
 
-## Example: problem csv
+## input: problem csv
 ### 9x9
 ```
  , ,9,4, , ,8,5, 
