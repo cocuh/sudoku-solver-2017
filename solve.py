@@ -1,6 +1,6 @@
 import argparse
 from collections import Counter, namedtuple
-from concurrent.futures import Executor, TimeoutError, Future, ProcessPoolExecutor
+from concurrent.futures import Executor, TimeoutError, Future, ProcessPoolExecutor, thread
 import copy
 import logging
 import math
@@ -316,8 +316,8 @@ def _solve_worker_multi(sudoku: Sudoku) -> MultiProcessedWorkerResult:
   return MultiProcessedWorkerResult(sudoku_results=result, assumptions=assumptions)
 
 
-def _solve_worker_single(sudoku: Sudoku) -> MultiProcessedWorkerResult:
-  results = _solve_single_thread(sudoku)
+def _solve_worker_single(sudoku: Sudoku, one_solution) -> MultiProcessedWorkerResult:
+  results = _solve_single_thread(sudoku, one_solution)
   return MultiProcessedWorkerResult(
     sudoku_results=results,
     assumptions=[],
@@ -341,7 +341,7 @@ def _solve_single_thread(sudoku: Sudoku, one_solution: bool) -> List[SudokuResul
     try:
       child_results = _solve_single_thread(sudoku_child, one_solution)
       results += child_results
-      if one_solution:
+      if one_solution and child_results:
         return results
     except SudokuConflict:
       logger.debug('backtrack')
@@ -349,9 +349,9 @@ def _solve_single_thread(sudoku: Sudoku, one_solution: bool) -> List[SudokuResul
   return results
 
 
-def solve(sudoku: Sudoku, 
+def solve(sudoku: Sudoku,
           executor: Optional[Executor],
-          one_solution:bool) -> List[SudokuResult]:
+          one_solution: bool) -> List[SudokuResult]:
   if executor is None:
     # single thread
     logger.debug('single threading')
@@ -368,10 +368,12 @@ def solve(sudoku: Sudoku,
       futures.remove(f)
       try:
         result: MultiProcessedWorkerResult = f.result(timeout=1)
-        if result.sudoku_results is not None:
+        if result.sudoku_results:
           satisfied_results += result.sudoku_results
           if one_solution:
             executor.shutdown(False)
+            for f in futures:  # type:Future
+              f.cancel()
             return satisfied_results
         else:
           for sudoku_child in result.assumptions:
@@ -380,7 +382,7 @@ def solve(sudoku: Sudoku,
               futures.append(executor.submit(_solve_worker_multi, sudoku_child))
             else:
               logger.debug('add task as to the last')
-              futures.append(executor.submit(_solve_worker_multi, sudoku_child))
+              futures.append(executor.submit(_solve_worker_single, sudoku_child, one_solution))
       except SudokuConflict:
         logger.debug('Sudoku Conflict in child')
       except TimeoutError:
@@ -483,7 +485,7 @@ def main():
     output.write('spend time(sec) = {}\n'.format(end_time - start_time))
   else:
     output.write('UNSATISFIABLE\n')
-
+  sys.exit()
 
 if __name__ == '__main__':
   main()
