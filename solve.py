@@ -1,9 +1,17 @@
+import argparse
 from collections import Counter, namedtuple
+from concurrent.futures import Executor, TimeoutError, Future, ProcessPoolExecutor
 import copy
+import logging
 import math
+import os
+import random
 import sys
 import time
-from typing import List, Optional, Set, Tuple, Dict
+from typing import List, Optional, Set, Tuple, Dict, TextIO
+
+logger = logging.getLogger(__name__)
+NUM_WORKER = os.cpu_count()
 
 
 class SudokuConflict(BaseException):
@@ -16,6 +24,7 @@ class PropagateBlockNameQueue(Counter):
   This queue counts the propagation to block as priority.
   The the priority is high, many cells try to propagate their conditions to the block.
   '''
+
   def dequeue(self):
     result_opt = self.most_common(1)
     if result_opt == []:
@@ -127,11 +136,10 @@ class Block:
       for k, v in possibles_counter.items()
       if v == 1
     }
-    
-    
+
     for c in filter(lambda c: not c.is_assigned(), cells):
       the_one_possibles = one_possibles.intersection(c.possibles)
-      if the_one_possibles: # the cell is identifiable by all different constraint 
+      if the_one_possibles:  # the cell is identifiable by all different constraint 
         if len(the_one_possibles) == 1:
           value = list(the_one_possibles)[0]
           c.assign(value)
@@ -139,7 +147,7 @@ class Block:
           has_cell_assigned = True
         else:
           raise SudokuConflict('multiple inferred values in one cell')
-      elif len(c.possibles) == 1: # possible values of the cell is singleton 
+      elif len(c.possibles) == 1:  # possible values of the cell is singleton 
         value = list(c.possibles)[0]
         c.assign(value)
         update_req_cells.add(c)
@@ -284,7 +292,39 @@ class Sudoku:
     return str(self.gen_result())
 
 
-def solve(sudoku: Sudoku) -> List[SudokuResult]:
+MultiProcessedWorkerResult = namedtuple(
+  'MultiProcessedWorkerResult',
+  ['sudoku_results', 'assumptions'],
+)
+
+
+def _solve_worker_multi(sudoku: Sudoku) -> MultiProcessedWorkerResult:
+  sudoku.propagate()
+  result = None
+  assumptions = []
+  if sudoku.is_all_assigned():
+    result = [sudoku.gen_result()]
+  else:
+    target_cell: Cell = sudoku.sample_cell_for_assuming()
+    values = copy.deepcopy(target_cell.possibles)
+    target_cell_coord = copy.deepcopy(target_cell.coord)
+    assumptions = []
+    for value in values:
+      sudoku_child = copy.deepcopy(sudoku)
+      sudoku_child.assign(target_cell_coord, value)
+      assumptions.append(sudoku_child)
+  return MultiProcessedWorkerResult(sudoku_results=result, assumptions=assumptions)
+
+
+def _solve_worker_single(sudoku: Sudoku) -> MultiProcessedWorkerResult:
+  results = _solve_single_thread(sudoku)
+  return MultiProcessedWorkerResult(
+    sudoku_results=results,
+    assumptions=[],
+  )
+
+
+def _solve_single_thread(sudoku: Sudoku) -> List[SudokuResult]:
   sudoku.propagate()
   if sudoku.is_all_assigned():
     return [sudoku.gen_result()]
@@ -296,21 +336,55 @@ def solve(sudoku: Sudoku) -> List[SudokuResult]:
   target_cell_coord = copy.deepcopy(target_cell.coord)
 
   for sudoku_child, value in [(copy.deepcopy(sudoku), v) for v in values]:
-    print('try assigning: {}={}'.format(target_cell_coord, value))
+    logger.debug('try assigning: {}={}'.format(target_cell_coord, value))
     sudoku_child.assign(target_cell_coord, value)
     try:
       child_results = solve(sudoku_child)
       results += child_results
     except SudokuConflict:
-      print('backtrack')
+      logger.debug('backtrack')
       pass
   return results
 
 
-def parse_csv(filepath: str) -> Sudoku:
-  with open(filepath) as fp:
-    body = fp.read().strip()
-    lines = list(body.splitlines())
+def solve(sudoku: Sudoku, executor: Optional[Executor] = None) -> List[SudokuResult]:
+  if executor is None:
+    # single thread
+    logger.debug('single threading')
+    return _solve_single_thread(sudoku)
+  else:
+    # multi-threading/processing 
+    logger.debug('multi-threading/processing')
+
+    satisfied_results = []
+
+    futures = [executor.submit(_solve_worker_multi, sudoku)]
+    while futures:  # type: Future
+      f = random.choice(futures)
+      futures.remove(f)
+      try:
+        result: MultiProcessedWorkerResult = f.result(timeout=1)
+        if result.sudoku_results is not None:
+          satisfied_results += result.sudoku_results
+        else:
+          for sudoku_child in result.assumptions:
+            if len(futures) <= NUM_WORKER:
+              logger.debug('add task and gen task')
+              futures.append(executor.submit(_solve_worker_multi, sudoku_child))
+            else:
+              logger.debug('add task as to the last')
+              futures.append(executor.submit(_solve_worker_multi, sudoku_child))
+      except SudokuConflict:
+        logger.debug('Sudoku Conflict in child')
+      except TimeoutError:
+        logger.debug('next future')
+        futures.append(f)
+    return satisfied_results
+
+
+def parse_csv(fp: TextIO) -> Sudoku:
+  body = fp.read().strip()
+  lines = list(body.splitlines())
   num_lines = len(lines)
   degree = math.floor(math.sqrt(num_lines))
   if degree ** 2 < num_lines:
@@ -330,43 +404,72 @@ def parse_csv(filepath: str) -> Sudoku:
   return sudoku
 
 
-def usage():
-  print('{} csv_path'.format(sys.argv[0]))
+def parse_args():
+  parser = argparse.ArgumentParser()
+  parser.add_argument(
+    'problem_csv',
+    type=argparse.FileType('r'),
+  )
+  parser.add_argument(
+    '--output',
+    type=argparse.FileType('w'),
+    default=sys.stdout,
+  )
+  parser.add_argument(
+    '--parallel',
+    action='store_true',
+    help='solve with multi-processing if specified, '
+         'default is single threading',
+  )
+  parser.add_argument(
+    '--debug',
+    action='store_true',
+  )
+  return parser.parse_args()
 
 
 def main():
-  if len(sys.argv) != 2:
-    usage()
-    sys.exit(1)
-  filepath = sys.argv[1]
-  sudoku = parse_csv(filepath)
+  args = parse_args()
+  if args.debug:
+    logging.basicConfig(
+      level=logging.DEBUG,
+    )
+  sudoku = parse_csv(args.problem_csv)
+  output: TextIO = args.output
 
   start_time = time.time()
 
-  print(sudoku)
+  if args.parallel:
+    executor = ProcessPoolExecutor(NUM_WORKER)
+  else:
+    executor = None
+
+  output.write(str(sudoku))
   try:
-    results = solve(sudoku)
+    results = solve(sudoku, executor)
   except SudokuConflict:
     results = []
   finally:
     end_time = time.time()
 
-  print()
+  output.write('\n\n')
 
   if results:
     if len(results) == 1:
-      print('SATISFIABLE: well-posed problem')
+      output.write('SATISFIABLE: well-posed problem\n')
     else:
-      print('SATISFIABLE')
-    print('#solutions = {}'.format(len(results)))
-    print('spend time(sec) = {}'.format(end_time - start_time))
-    print()
+      output.write('SATISFIABLE\n')
+    output.write('#solutions = {}\n'.format(len(results)))
+    output.write('spend time(sec) = {}\n'.format(end_time - start_time))
+    output.write('\n')
     for idx, res in enumerate(results, start=1):
-      print('solution {}/{}'.format(idx, len(results)))
-      print(res)
-      print()
+      output.write('solution {}/{}\n'.format(idx, len(results)))
+      output.write(str(res))
+      output.write('\n\n')
+    output.write('#solutions = {}\n'.format(len(results)))
+    output.write('spend time(sec) = {}\n'.format(end_time - start_time))
   else:
-    print('UNSATISFIABLE')
+    output.write('UNSATISFIABLE\n')
 
 
 if __name__ == '__main__':
