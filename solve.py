@@ -1,12 +1,9 @@
-from typing import List, Optional, Set, Tuple, Dict
-from weakref import ref
-from collections import Counter, namedtuple
-
 import copy
 import math
 import sys
-
 import time
+from collections import Counter, namedtuple
+from typing import List, Optional, Set, Tuple, Dict
 
 
 class SudokuConflict(BaseException):
