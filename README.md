@@ -65,7 +65,8 @@ spend time(sec) = 0.06147480010986328
 
 $ python solve.py --parallel test_data/well-posed/25x25.csv
 ...
-
+#solutions = 1
+spend time(sec) = 76.580557346344
 ```
 
 ## ill-posed
