@@ -126,7 +126,7 @@ class Block:
 
     # initialize possibles_counter and update cell's possible
     for c in filter(lambda c: not c.is_assigned(), cells):
-      if c.possibles - self.rest_values:
+      if not (c.possibles <= self.rest_values):
         # the cell is required to update
         c.possibles = c.possibles.intersection(self.rest_values)
         update_req_cells.add(c)
@@ -288,6 +288,7 @@ class Sudoku:
     return min(
       (c for c in self.cells.values() if c.value is None),
       key=lambda c: (
+        len(c.possibles),
         len(c.possibles) / len(ft.reduce(op.or_, (b.rest_values for b in map(sudoku.get_block, c.block_names)))),
       ),
     )
