@@ -8,7 +8,7 @@ positional arguments:
 
 optional arguments:
   -h, --help       show this help message and exit
-  --output OUTPUT
+  --output OUTPUT  default: stdout
   --parallel       solve with cpu_num*2 worker processes if specified, 
                    default: single threading
   --debug

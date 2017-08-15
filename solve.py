@@ -434,6 +434,7 @@ def parse_args():
     '--output',
     type=argparse.FileType('w'),
     default=sys.stdout,
+    help='default: stdout',
   )
   parser.add_argument(
     '--parallel',
